@@ -1,12 +1,11 @@
-import os
-import os, random, shutil
+import os, random, shutil, urllib
+
 import matplotlib.pyplot as plt
 import numpy as np
 import requests
 import scipy.ndimage as ndi
 import torch
 from torchmore2.ctc import ctc_decode
-import urllib
 
 from . import nlbin
 
@@ -15,6 +14,7 @@ plt.rc("image", interpolation="nearest")
 
 default_device = "?cuda:0" if torch.cuda.is_available() else "cpu"
 default_device = os.environ.get("OCROPUS4_DEVICE", default_device)
+
 
 class OnDevice:
     """Performs inference on device.
@@ -55,6 +55,7 @@ class OnDevice:
 
 def usm_filter(image):
     return image - ndi.gaussian_filter(image, 16.0)
+
 
 class PageSegmenter:
     def __init__(self, murl, device=default_device):
@@ -143,6 +144,7 @@ def get_model(url):
     else:
         raise Exception("unknown url scheme: " + url)
 
+
 def load_model(path):
     print("loading model", path)
     if path.endswith(".jit"):
@@ -150,8 +152,8 @@ def load_model(path):
 
         return torch.jit.load(path)
     elif path.endswith(".pth"):
-        import torch
         import ocrlib.ocrmodels as models
+        import torch
 
         mname = os.path.basename(path).split("-")[0]
         model = models.make(mname, device="cpu")
@@ -160,6 +162,7 @@ def load_model(path):
         return model
     else:
         raise Exception("unknown model type: " + path)
+
 
 class WordRecognizer:
     def __init__(self, murl, charset=None, device=default_device, maxheight=48.0):
@@ -174,7 +177,7 @@ class WordRecognizer:
         images = [scale_to_maxheight(im, self.maxheight) for im in images]
         images = [usm_filter(im) for im in images]
         assert all(im.shape[0] <= self.maxheight for im in images)
-        input = batch_images(images) # BDHW
+        input = batch_images(images)  # BDHW
         assert torch.is_tensor(input)
         with OnDevice(self.model, self.device) as model:
             with torch.no_grad():
