@@ -310,7 +310,6 @@ class SavingForTrainer(object):
         self.epoch = epochof(fname) + 1
         return True
 
-
 class ReporterForTrainer(object):
     """Report mixin for Trainers."""
 
@@ -362,6 +361,7 @@ class ReporterForTrainer(object):
             return
         if time.time() - self.last_display < self.every:
             return
+        print(f"{self.epoch:3d} {self.count:9d} {mean(self.losses[-100:]):10.4f}")
         self.last_display = time.time()
         if self.fig is None:
             self.fig = plt.figure(figsize=(10, 8))
@@ -519,7 +519,6 @@ class LineTrainer(BaseTrainer):
         """Plot the posteriors for each class and location."""
         # layers.check_order(outputs, "BDL")
         pred = outputs[0].detach().cpu().softmax(0)
-        print(pred.shape)
         # assert pred.shape[0] == len(self.charset)+1, (pred.shape, len(self.charset)+1)
         decoded = ctc_decode(pred)
         if self.charset:
