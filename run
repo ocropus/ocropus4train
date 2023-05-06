@@ -35,6 +35,12 @@ cmd_words() {
     papermill train-words-v3.ipynb train-words-v3-LOG.ipynb --log-output --autosave-cell-every 60
 }
 
+cmd_segs() {
+    unset GOPEN_VERBOSE
+    unset WDS_VERBOSE_CACHE
+    papermill train-segs-v3.ipynb train-segs-v3-LOG.ipynb --log-output --autosave-cell-every 60
+}
+
 cmd_help() { # help message
 echo
 echo available commands:
