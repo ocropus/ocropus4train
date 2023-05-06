@@ -32,7 +32,7 @@ cmd_lab() { # run jupyter lab in the environment
 cmd_words() {
     unset GOPEN_VERBOSE
     unset WDS_VERBOSE_CACHE
-    papermill train-words-v3.ipynb train-words-v3-result.ipynb --log-output
+    papermill train-words-v3.ipynb train-words-v3-LOG.ipynb --log-output
 }
 
 cmd_help() { # help message
