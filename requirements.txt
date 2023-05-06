@@ -1,0 +1,22 @@
+numpy
+torch
+torchvision
+scipy
+matplotlib
+graphviz
+msgpack
+pyzmq
+braceexpand
+natsort
+editdistance
+einsum
+einops
+imageio
+kornia
+-e git+https://github.com/tmbdev/hocr-tools#egg=hocr-tools
+-e git+https://github.com/tmbdev/webdataset#egg=webdataset
+-e git+https://github.com/tmbdev/torchmore#egg=torchmore
+-e git+https://github.com/tmbdev/torchmore2#egg=torchmore2
+-e git+https://github.com/NVlabs/tensorcom#egg=tensorcom
+-e git+https://github.com/NVlabs/torchtrainers#egg=torchtrainers
+-e git+https://github.com/NVlabs/ocrodeg#egg=ocrodeg
