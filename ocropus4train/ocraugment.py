@@ -2,7 +2,7 @@ import ocrodeg
 import scipy
 import scipy.ndimage
 import scipy.ndimage as ndi
-from ocrlib.ocrhelpers import *
+from .ocrhelpers import *
 
 
 def maybe(p):

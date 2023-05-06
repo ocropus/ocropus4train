@@ -8,7 +8,7 @@ import torch
 from numpy import *
 from scipy import ndimage as ndi
 from torch import nn, optim
-from torchmore import layers
+from torchmore2 import layers
 
 plt.rc("image", cmap="gray")
 plt.rc("image", interpolation="nearest")

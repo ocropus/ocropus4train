@@ -8,6 +8,7 @@ from torch import nn
 from torchmore2 import combos, flex
 
 from . import ocrmodels as ocrmodels_old
+from . import ocrlayers
 
 default_device = torch.device(os.environ.get("device", "cuda:0"))
 noutput = 53
@@ -177,5 +178,38 @@ def make_seg_unet_v2(noutput=4, dropout=0.0, levels=5, complexity=64, final=4):
         # *combos.conv2d_block(64, 3, repeat=2),
         flex.Conv2d(noutput, 5),
     )
+    flex.shape_inference(model, torch.randn((2, 1, 256, 256)))
+    return model
+
+
+def make_lstm_resnet_v3(noutput=noutput, blocksize=5, kinds="unknown"):
+    model = nn.Sequential(
+        TextInput(),
+        *combos.conv2d_block(64, 3, mp=(2, 1)),
+        *combos.resnet_blocks(blocksize, 64),
+        *combos.conv2d_block(128, 3, mp=(2, 1)),
+        *combos.resnet_blocks(blocksize, 128),
+        *combos.conv2d_block(256, 3, mp=2),
+        *combos.resnet_blocks(blocksize, 256),
+        *combos.conv2d_block(256, 3),
+        *project_and_lstm_v2(100, noutput),
+    )
+    model = ocrlayers.CTCRecognizer(model, noutput=noutput, kinds=kinds)
+    flex.shape_inference(model, torch.randn((2, 1, 48, 512)))
+    return model
+
+
+def make_seg_unet_v3(noutput=4, dropout=0.0, levels=5, complexity=64, final=4, kinds="unknown"):
+    size = [int(complexity * (2.0**x)) for x in np.linspace(0, 3, levels)]
+    model = nn.Sequential(
+        SegInput(),
+        *combos.conv2d_block(64, 3, repeat=3),
+        combos.make_unet(size, sub=flex.BDHW_LSTM(size[-1])),
+        *combos.conv2d_block(64, 3, repeat=2),
+        flex.BDHW_LSTM(final),
+        # *combos.conv2d_block(64, 3, repeat=2),
+        flex.Conv2d(noutput, 5),
+    )
+    model = ocrlayers.PixSegmenter(model, noutput=noutput, kinds=kinds)
     flex.shape_inference(model, torch.randn((2, 1, 256, 256)))
     return model

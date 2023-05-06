@@ -21,6 +21,6 @@ papermill
 -e git+https://github.com/tmbdev/webdataset#egg=webdataset
 -e git+https://github.com/NVlabs/ocrodeg#egg=ocrodeg
 # -e git+https://github.com/tmbdev/hocr-tools#egg=hocr-tools
-# -e git+https://github.com/tmbdev/torchmore#egg=torchmore
+-e git+https://github.com/tmbdev/torchmore#egg=torchmore
 # -e git+https://github.com/NVlabs/tensorcom#egg=tensorcom
 # -e git+https://github.com/NVlabs/torchtrainers#egg=torchtrainers
