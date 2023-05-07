@@ -472,11 +472,10 @@ class BaseTrainer(ReporterForTrainer, SavingForTrainer):
             and inputs.amax() <= self.input_range[1]
         )
         if self.mode == "ctc":
-            assert isinstance(targets, tuple)
-            assert len(targets) == 2
+            assert isinstance(targets, tuple) and len(targets) == 2, targets
             outputs = self.model.forward(inputs.to(self.device))
-            assert targets.amax() <= outputs.size(1)
-            loss = self.compute_loss(outputs.cpu(), targets.cpu())
+            assert targets[0].amax() <= outputs.size(1), (targets[0].amax(), outputs.size(1))
+            loss = self.compute_loss(outputs.cpu(), (targets[0].cpu(), targets[1].cpu()))
         elif self.mode == "tf":
             assert isinstance(targets, torch.Tensor)
             assert targets.shape[0] == inputs.shape[0]
