@@ -36,6 +36,13 @@ cmd_words() {
     papermill train-words-v3.ipynb train-words-v3-LOG.ipynb --log-output --autosave-cell-every 60
 }
 
+cmd_trans() {
+    source venv/bin/activate
+    unset GOPEN_VERBOSE
+    unset WDS_VERBOSE_CACHE
+    papermill train-trans-v1.ipynb train-trans-v1-LOG.ipynb --log-output --autosave-cell-every 60
+}
+
 cmd_segs() {
     source venv/bin/activate
     unset GOPEN_VERBOSE
