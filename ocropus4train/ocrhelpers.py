@@ -9,6 +9,7 @@ from numpy import *
 from scipy import ndimage as ndi
 from torch import nn, optim
 from torchmore2 import layers
+import torch.nn.functional as F
 
 plt.rc("image", cmap="gray")
 plt.rc("image", interpolation="nearest")
@@ -190,6 +191,25 @@ def collate4ocr(samples):
     allseqs = torch.cat(seqs).long()
     alllens = torch.tensor([len(s) for s in seqs]).long()
     return (result, (allseqs, alllens))
+
+def collate4trans(samples):
+    """Collate image+sequence samples into batches.
+    This returns an image batch and a compressed sequence batch using CTCLoss conventions.
+    """
+    images, seqs = zip(*samples)
+    images = [im.unsqueeze(2) if im.ndimension() == 2 else im for im in images]
+    w, h, d = map(max, zip(*[x.shape for x in images]))
+    result = torch.zeros((len(images), w, h, d), dtype=torch.float)
+    for i, im in enumerate(images):
+        w, h, d = im.shape
+        if im.dtype == torch.uint8:
+            im = im.float() / 255.0
+        result[i, :w, :h, :d] = im
+    maxlen = max(len(s) for s in seqs)
+    allseqs = torch.zeros((len(seqs), maxlen+1), dtype=torch.long)
+    for i, s in enumerate(seqs):
+        allseqs[i, :len(s)] = s
+    return (result, allseqs)
 
 
 def model_device(model):
@@ -402,12 +422,17 @@ class BaseTrainer(ReporterForTrainer, SavingForTrainer):
         device="cuda",
         savedir=True,
         maxgrad=10.0,
+        mode="ctc",
         **kw,
     ):
         super().__init__()
         self.model = model.to(device)
         self.device = device
-        # self.lossfn = nn.CTCLoss()
+        if lossfn is None:
+            if mode == "ctc":
+                lossfn = CTCLossBDL()
+            elif mode == "tf":
+                lossfn = nn.CrossEntropyLoss()
         self.lossfn = lossfn
         self.probfn = probfn
         self.every = every
@@ -419,6 +444,7 @@ class BaseTrainer(ReporterForTrainer, SavingForTrainer):
         self.maxcount = get_maxcount()
         self.epoch = 0
         self.input_range = (-2.0, 2.0)
+        self.mode = mode
 
     def set_lr(self, lr, momentum=0.9):
         """Set the learning rate.
@@ -441,19 +467,25 @@ class BaseTrainer(ReporterForTrainer, SavingForTrainer):
         assert inputs.shape[1] in [1, 3], inputs.shape
         self.last_batch = (inputs, None, targets)
         self.model.train()
-        self.optimizer.zero_grad()
         assert (
             inputs.amin() >= self.input_range[0]
             and inputs.amax() <= self.input_range[1]
         )
-        outputs = self.model.forward(inputs.to(self.device))
-        if torch.isnan(outputs).any():
-            raise NanError()
-        assert inputs.size(0) == outputs.size(0)
-        assert targets[0].amax() <= outputs.size(1)
-        loss = self.compute_loss(outputs, targets)
+        if self.mode == "ctc":
+            assert isinstance(targets, tuple)
+            assert len(targets) == 2
+            outputs = self.model.forward(inputs.to(self.device))
+            assert targets.amax() <= outputs.size(1)
+            loss = self.compute_loss(outputs.cpu(), targets.cpu())
+        elif self.mode == "tf":
+            assert isinstance(targets, torch.Tensor)
+            assert targets.shape[0] == inputs.shape[0]
+            outputs = self.model.forward(inputs.to(self.device), targets.to(self.device))
+            assert targets.amax() <= outputs.size(1)
+            loss = self.compute_loss(outputs, targets.to(self.device))
         if torch.isnan(loss):
             raise ValueError("loss is nan")
+        self.optimizer.zero_grad()
         loss.backward()
         if self.clip_gradient is not None:
             nn.utils.clip_grad_norm_(self.model.parameters(), self.clip_gradient)
@@ -512,7 +544,7 @@ class LineTrainer(BaseTrainer):
     """Specialized Trainer for training line recognizers with CTC."""
 
     def __init__(self, model, charset=None, **kw):
-        super().__init__(model, lossfn=CTCLossBDL(), **kw)
+        super().__init__(model, **kw)
         self.charset = charset
 
     def report_outputs(self, ax, outputs):

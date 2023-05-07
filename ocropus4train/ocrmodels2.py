@@ -4,14 +4,30 @@ import numpy as np
 import torch
 import torch.jit
 from einops.layers.torch import Rearrange
+from einops import rearrange
 from torch import nn
 from torchmore2 import combos, flex
+import torch.nn.functional as F
 
 from . import ocrmodels as ocrmodels_old
 from . import ocrlayers
 
 default_device = torch.device(os.environ.get("device", "cuda:0"))
 noutput = 53
+
+def reorder(x: torch.Tensor, old: str, new: str, set_order: bool = True) -> torch.Tensor:
+    """Reorder dimensions according to strings.
+    E.g., reorder(x, "BLD", "LBD")
+    """
+    assert isinstance(old, str) and isinstance(new, str)
+    for c in old:
+        assert new.find(c) >= 0
+    for c in new:
+        assert old.find(c) >= 0
+    permutation = [old.find(c) for c in new]
+    assert len(old) == x.ndim, (old, x.size())
+    result = x.permute(permutation).contiguous()
+    return result
 
 
 def find_constructor(name, module):
@@ -212,4 +228,92 @@ def make_seg_unet_v3(noutput=4, dropout=0.0, levels=5, complexity=64, final=4, k
     )
     model = ocrlayers.PixSegmenter(model, noutput=noutput, kinds=kinds)
     flex.shape_inference(model, torch.randn((2, 1, 256, 256)))
+    return model
+
+class Sum2(nn.Module):
+  def forward(self, x):
+    return x.sum(2)
+
+import math
+
+class PositionalEncoding(nn.Module):
+
+    def __init__(self, d_model, dropout=0.1, max_len=5000):
+        super(PositionalEncoding, self).__init__()
+        self.dropout = nn.Dropout(p=dropout)
+        pe = torch.zeros(max_len, d_model)
+        position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1)
+        div_term = torch.exp(torch.arange(0, d_model, 2).float() * (-math.log(10000.0) / d_model))
+        pe[:, 0::2] = torch.sin(position * div_term)
+        pe[:, 1::2] = torch.cos(position * div_term)
+        pe = pe.unsqueeze(0).transpose(0, 1)
+        self.register_buffer('pe', pe)
+
+    def forward(self, x):
+        x = x + self.pe[:x.size(0), :]
+        return self.dropout(x)
+
+def preencoder_v1(nembed):
+    model = nn.Sequential(
+        *combos.conv2d_block(50, 3, mp=(2, 1)),
+        *combos.conv2d_block(100, 3, mp=(2, 1)),
+        *combos.conv2d_block(150, 3, mp=2),
+        Sum2(),
+        Rearrange("B D L -> L B D"),
+        flex.LSTM(100, bidirectional=True, num_layers=1),
+        Rearrange("L B D -> B D L"),
+        flex.Conv1d(nembed, 1),
+    )
+    flex.shape_inference(model, torch.randn((2, 1, 256, 256)))
+    return model
+    
+class OcroTrans(nn.Module):
+
+  def __init__(self, preencoder=None, ncodes=96, nembed=256, nseq=256, nhead=4, nelayers=2, ndlayers=2):
+    super().__init__()
+    self.ncodes = ncodes
+    self.pe = PositionalEncoding(nembed)
+    self.preencoder = preencoder or preencoder_v1(nseq)
+    self.lin = nn.Linear(nseq, nembed)
+    self.embed = nn.Linear(ncodes, nembed)
+    self.tr = nn.Transformer(
+        d_model=nembed,
+        nhead=nhead,
+        num_encoder_layers=nelayers,
+        num_decoder_layers=ndlayers,
+        dim_feedforward=4*nembed,
+    )
+    self.decode = nn.Linear(nembed, ncodes)
+
+  def forward(self, x, y):
+    assert x.ndim == 4  # b d h w
+    assert y.ndim == 2  # b l
+    assert y.amax() < self.ncodes and y.amin() >= 0
+
+    m = self.preencoder(x)  # -> b d l
+    # m = Rearrange("b d l -> l b d")(m)
+    m = reorder(m, "BDL", "LBD")
+    m = self.lin(m)
+    self.pe(m)
+
+    start = torch.zeros((y.shape[0], 1), dtype=torch.long, device=y.device)
+    y = torch.cat([start, y], dim=1)
+    y = F.one_hot(y, self.ncodes).float()
+    y = self.embed(y)
+    # y = Rearrange("b l d -> l b d")(y)
+    y = reorder(y, "BLD", "LBD")
+    y = self.pe(y)
+
+    # mask = nn.Transformer.generate_square_subsequent_mask(y.shape[0], device=y.device)
+    sz = y.shape[0]
+    mask = torch.triu(torch.full((sz, sz), float('-inf'), device=y.device), diagonal=1)
+    z = self.tr.forward(m, y, tgt_mask=mask)
+    z = self.decode(z)
+
+    # return Rearrange("l b d -> b d l")(z[:-1])
+    return reorder(z[:-1], "LBD", "BDL")
+
+def make_tf_v1(noutput=noutput, blocksize=5):
+    model = OcroTrans()
+    model = ocrlayers.TransformerRecognizer(model, noutput=noutput)
     return model
