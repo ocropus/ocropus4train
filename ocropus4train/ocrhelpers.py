@@ -381,7 +381,8 @@ class ReporterForTrainer(object):
             return
         if time.time() - self.last_display < self.every:
             return
-        print(f"{self.epoch:3d} {self.count:9d} {mean(self.losses[-100:]):10.4f}")
+        current_lr = self.optimizer.param_groups[0]["lr"]
+        print(f"{self.epoch:3d} {self.count:9d} {mean(self.losses[-100:]):10.4f} (lr={current_lr:10.4f})", file=sys.stderr)
         self.last_display = time.time()
         if self.fig is None:
             self.fig = plt.figure(figsize=(10, 8))
@@ -550,8 +551,14 @@ class LineTrainer(BaseTrainer):
         """Plot the posteriors for each class and location."""
         # layers.check_order(outputs, "BDL")
         pred = outputs[0].detach().cpu().softmax(0)
+        assert pred.ndim == 2, pred.shape
         # assert pred.shape[0] == len(self.charset)+1, (pred.shape, len(self.charset)+1)
-        decoded = ctc_decode(pred)
+        if self.mode == "ctc":
+            decoded = ctc_decode(pred)
+        elif self.mode == "tf":
+            decoded = [c for c in pred.argmax(0) if c != 0]
+        else:
+            raise ValueError(self.mode)
         if self.charset:
             ax.set_title(self.charset.decode(decoded))
         for i in range(pred.shape[0]):
