@@ -1,0 +1,10 @@
+#!/bin/bash
+set -e
+set -x
+while true; do 
+    for logfile in *-LOG.ipynb; do
+        jupyter nbconvert --to html $logfile
+    done
+    gsutil cp *-LOG.html $1
+    sleep 600
+done
