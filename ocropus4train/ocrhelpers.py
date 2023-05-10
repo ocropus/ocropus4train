@@ -423,7 +423,7 @@ class BaseTrainer(ReporterForTrainer, SavingForTrainer):
         device="cuda",
         savedir=True,
         maxgrad=10.0,
-        mode="ctc",
+        mode=None,
         **kw,
     ):
         super().__init__()
@@ -482,6 +482,9 @@ class BaseTrainer(ReporterForTrainer, SavingForTrainer):
             assert targets.shape[0] == inputs.shape[0]
             outputs = self.model.forward(inputs.to(self.device), targets.to(self.device))
             assert targets.amax() <= outputs.size(1)
+            loss = self.compute_loss(outputs, targets.to(self.device))
+        else:
+            outputs = self.model.forward(inputs.to(self.device))
             loss = self.compute_loss(outputs, targets.to(self.device))
         if torch.isnan(loss):
             raise ValueError("loss is nan")
