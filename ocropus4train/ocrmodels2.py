@@ -235,7 +235,7 @@ def make_seg_unet_v4(noutput=7, dropout=0.0, levels=5, complexity=96, final=8, k
     model = nn.Sequential(
         SegInput(),
         *combos.conv2d_block(complexity, 3, repeat=3),
-        combos.make_unet(size, sub=flex.BDHW_LSTM(size[-1])),
+        ocrlayers.AutoDevice(combos.make_unet(size, sub=flex.BDHW_LSTM(size[-1]))),
         *combos.conv2d_block(complexity, 3, repeat=2),
         flex.BDHW_LSTM(final),
         # *combos.conv2d_block(64, 3, repeat=2),
