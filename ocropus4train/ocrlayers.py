@@ -66,6 +66,24 @@ class PixSegmenter(nn.Module):
             assert x.amin() >= 0.0 and x.amax() <= 1.0
         return self.model(x)
 
+class MultiPixSegmenter(nn.Module):
+    def __init__(self, model, **kw):
+        super().__init__()
+        self.meta = dict(__kind__="PixSegmenter", **kw)
+        self.model = model
+        self.channels = kw.get("channels", 1)
+        self.usm = kw.get("usm", 16.0)
+
+    def forward(self, x):
+        assert x.dtype in [torch.float16, torch.float32, torch.float64]
+        assert x.ndim == 4
+        assert x.shape[1] == self.channels
+        assert x.abs().max() <= 200.0
+        if self.usm > 0:
+            assert x.amin() < 0.0
+        else:
+            assert x.amin() >= 0.0 and x.amax() <= 1.0
+        return self.model(x)
 
 class RectLinearizer(nn.Module):
     def __init__(self, model, **kw):

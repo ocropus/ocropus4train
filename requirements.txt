@@ -17,6 +17,7 @@ lightning
 ray[air]
 ray[tune]
 papermill
+webdataset
 -e git+https://github.com/tmbdev/torchmore2#egg=torchmore2
 -e git+https://github.com/tmbdev/webdataset#egg=webdataset
 -e git+https://github.com/NVlabs/ocrodeg#egg=ocrodeg
