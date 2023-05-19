@@ -230,6 +230,21 @@ def make_seg_unet_v3(noutput=4, dropout=0.0, levels=5, complexity=64, final=4, k
     flex.shape_inference(model, torch.randn((2, 1, 256, 256)))
     return model
 
+def make_seg_unet_v4(noutput=7, dropout=0.0, levels=5, complexity=96, final=8, kinds="unknown"):
+    size = [int(complexity * (2.0**x)) for x in np.linspace(0, 3, levels)]
+    model = nn.Sequential(
+        SegInput(),
+        *combos.conv2d_block(complexity, 3, repeat=3),
+        combos.make_unet(size, sub=flex.BDHW_LSTM(size[-1])),
+        *combos.conv2d_block(complexity, 3, repeat=2),
+        flex.BDHW_LSTM(final),
+        # *combos.conv2d_block(64, 3, repeat=2),
+        flex.Conv2d(noutput, 5),
+    )
+    model = ocrlayers.MultiPixSegmenter(model, noutput=noutput, kinds=kinds)
+    flex.shape_inference(model, torch.randn((2, 1, 256, 256)))
+    return model
+
 class Sum2(nn.Module):
   def forward(self, x):
     return x.sum(2)
@@ -248,6 +263,9 @@ class PositionalEncoding(nn.Module):
         pe[:, 1::2] = torch.cos(position * div_term)
         pe = pe.unsqueeze(0).transpose(0, 1)
         self.register_buffer('pe', pe)
+
+    def encoding(self, n):
+        return self.pe[:n, :]
 
     def forward(self, x):
         x = x + self.pe[:x.size(0), :]

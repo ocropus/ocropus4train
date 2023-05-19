@@ -596,13 +596,47 @@ class LineTrainer(BaseTrainer):
 class SegTrainer(BaseTrainer):
     """Segmentation trainer: image to pixel classes."""
 
-    def __init__(self, model, margin=16, masked=4, **kw):
+    def __init__(self, model, margin=16, masked=4, lossfn=None, **kw):
+        lossfn = lossfn or nn.CrossEntropyLoss()
         """Like regular trainer but allows margin specification."""
-        super().__init__(model, lossfn=nn.CrossEntropyLoss(), **kw)
+        super().__init__(model, lossfn=lossfn, **kw)
         self.margin = margin
         self.masked = masked
 
     def compute_loss(self, outputs, targets):
+        if targets.ndim == 3:
+            return self.compute_loss_ce(outputs, targets)
+        elif targets.ndim == 4:
+            return self.compute_loss_bce(outputs, targets)
+        else:
+            raise ValueError(targets.shape)
+
+    def compute_loss_bce(self, outputs, targets):
+        """Compute loss taking a margin into account."""
+        b, d, h, w = outputs.shape
+        b1, d1, h1, w1 = targets.shape
+        assert b == b1 and d == d1, (outputs.shape, targets.shape)
+        assert h <= h1 and w <= w1 and h1 - h < 5 and w1 - w < 5, (
+            outputs.shape,
+            targets.shape,
+        )
+        targets = targets[:, :, :h, :w]
+        # lsm = outputs.log_softmax(1)
+        if self.masked >= 0:
+            mask = ndi.maximum_filter(
+                targets.sum(axis=1).numpy() > 0, (0, self.masked, self.masked)
+            )
+            mask = torch.tensor(mask, dtype=torch.uint8)
+            outputs = outputs * mask.to(outputs.device).unsqueeze(1)
+            targets = targets * mask.to(targets.device).unsqueeze(1)
+        if self.margin > 0:
+            m = self.margin
+            outputs = outputs[:, :, m:-m, m:-m]
+            targets = targets[:, :, m:-m, m:-m]
+        loss = self.lossfn(outputs, targets.to(outputs.device))
+        return loss
+    
+    def compute_loss_ce(self, outputs, targets):
         """Compute loss taking a margin into account."""
         b, d, h, w = outputs.shape
         b1, h1, w1 = targets.shape
@@ -633,7 +667,7 @@ class SegTrainer(BaseTrainer):
         result = asnp(p)[0].transpose(1, 2, 0)
         result -= amin(result)
         result /= amax(result)
-        if result.shape[2] == 4:
+        if result.shape[2] >= 4:
             result = result[:, :, 1:4]
         ax.imshow(result)
         ax.plot([w // 2, w // 2], [0, h], color="white", alpha=0.5)
@@ -645,5 +679,7 @@ class SegTrainer(BaseTrainer):
             colors = "r g b".split()
         elif d == 4:
             colors = "black r g b".split()
+        elif d == 7:
+            colors = "black r g b c m y".split()
         for i in range(min(d, len(colors))):
             ax.plot(p[0, i, :, w // 2], color=colors[i])
