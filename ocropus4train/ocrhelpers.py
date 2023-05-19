@@ -10,6 +10,7 @@ from scipy import ndimage as ndi
 from torch import nn, optim
 from torchmore2 import layers
 import torch.nn.functional as F
+from ocropus4train import ocrlayers
 
 plt.rc("image", cmap="gray")
 plt.rc("image", interpolation="nearest")
@@ -662,7 +663,12 @@ class SegTrainer(BaseTrainer):
 
     def report_outputs(self, ax, outputs):
         """Display the RGB output posterior probabilities."""
-        p = outputs.detach().cpu().softmax(1)
+        if isinstance(self.model, ocrlayers.MultiPixSegmenter):
+            p = outputs.detach().cpu().sigmoid()
+        elif isinstance(self.model, ocrlayers.PixSegSegmenter):
+            p = outputs.detach().cpu().softmax(1)
+        else:
+            raise ValueError(self.model)
         b, d, h, w = outputs.size()
         result = asnp(p)[0].transpose(1, 2, 0)
         result -= amin(result)
@@ -673,7 +679,12 @@ class SegTrainer(BaseTrainer):
         ax.plot([w // 2, w // 2], [0, h], color="white", alpha=0.5)
 
     def report_extra(self, ax, inputs, targets, outputs):
-        p = outputs.detach().cpu().softmax(1)
+        if isinstance(self.model, ocrlayers.MultiPixSegmenter):
+            p = outputs.detach().cpu().sigmoid()
+        elif isinstance(self.model, ocrlayers.PixSegSegmenter):
+            p = outputs.detach().cpu().softmax(1)
+        else:
+            raise ValueError(self.model)
         b, d, h, w = p.size()
         if d == 3:
             colors = "r g b".split()
