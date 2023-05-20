@@ -190,3 +190,22 @@ class PagePreprocessor(nn.Module):
         else:
             assert x.amin() >= 0.0 and x.amax() <= 1.0
         return self.model(x)
+    
+class AutoDevice(torch.nn.Module):
+    def __init__(self, module, name=None):
+        super().__init__()
+        self.module = module
+        self.device = None
+        self.name = name
+
+    def to(self, device):
+        super().to(device)
+        self.device = device
+        self.module.to(device)
+        return self
+
+    def forward(self, x):
+        if self.device is None:
+            return self.module(x)
+        else:
+            return self.module(x.to(self.device)).to(x.device)

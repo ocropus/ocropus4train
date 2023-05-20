@@ -27,3 +27,4 @@ prep
 TESTS
 tags
 models
+*-LOG.ipynb

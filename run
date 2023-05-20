@@ -50,6 +50,13 @@ cmd_segs() {
     papermill train-segs-v3.ipynb train-segs-v3-LOG.ipynb --log-output --autosave-cell-every 60
 }
 
+cmd_segsv4() {
+    source venv/bin/activate
+    unset GOPEN_VERBOSE
+    unset WDS_VERBOSE_CACHE
+    papermill train-segs-v4.ipynb train-segs-v4-LOG.ipynb --log-output --autosave-cell-every 60
+}
+
 cmd_help() { # help message
 echo
 echo available commands:

@@ -428,8 +428,12 @@ class BaseTrainer(ReporterForTrainer, SavingForTrainer):
         **kw,
     ):
         super().__init__()
-        self.model = model.to(device)
-        self.device = device
+        if device is not None:
+            self.model = model.to(device)
+            self.device = device
+        else:
+            self.model = model
+            self.device = next(model.parameters()).device
         if lossfn is None:
             if mode == "ctc":
                 lossfn = CTCLossBDL()
